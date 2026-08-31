@@ -1,3 +1,4 @@
+
 # Exercise 2 — Designing Differentiated Tool Descriptions
 
 Picking up from Exercise 1: the error contract is in place and every handler returns a

@@ -12,7 +12,12 @@ from __future__ import annotations
 # (the first tool with a matching keyword wins). Order matters: more specific intents (shrinkage,
 # returns, pricing) should be checked before the general stock-availability keywords so a phrase
 # like "return this item" never resolves to check_stock.
-_INTENT_KEYWORDS: list[tuple[str, tuple[str, ...]]] = []
+_INTENT_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("flag_shrinkage", ("shrinkage", "loss", "theft", "damage", "missing")),
+    ("process_return", ("return", "refund", "exchange", "replace", "repair")),
+    ("update_price", ("price", "markdown", "update", "adjust", "change", "modify")),
+    ("check_stock", ("stock", "inventory", "quantity", "level", "availability", "available"))
+]
 
 
 def route_intent(intent: str) -> str | None:
