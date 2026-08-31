@@ -10,11 +10,32 @@ from __future__ import annotations
 
 CUSTOM_INVENTORY = "<custom inventory tool>"
 
-# TODO: Build the priority-ordered rule table that maps a task to the narrowest correct tool.
-# Each rule is (tool, keywords); the first matching rule wins, so order from most specific to
-# most general. Cover: domain operations -> CUSTOM_INVENTORY; an Edit with no unique anchor ->
-# "Read+Write"; plus Glob, Grep, Bash, Write, Edit, Read for file/codebase work.
-_RULES: list[tuple[str, tuple[str, ...]]] = []
+# Priority-ordered: the first matching rule wins, so rules run from most specific to most general.
+# 1) The Edit-fails fallback is a special case of Edit, so it is checked before Edit itself.
+# 2) Domain operations always route to the custom inventory tools, never a built-in.
+# 3) The file/codebase built-ins follow, each keyed on distinctive verbs so a "search" task lands
+#    on Grep while a "matching pattern" task lands on Glob.
+_RULES: list[tuple[str, tuple[str, ...]]] = [
+    # Edit could not find a unique anchor -> fall back to Read + Write.
+    ("Read+Write", ("not unique", "anchor", "edit failed", "edit fails", "no unique anchor")),
+    # Domain operations -> custom inventory tools.
+    (
+        CUSTOM_INVENTORY,
+        (
+            "stock", "inventory", "restock", "units", "sku",
+            "return", "refund",
+            "price", "markdown",
+            "shrinkage", "theft", "warehouse",
+        ),
+    ),
+    # File/codebase built-ins.
+    ("Glob", ("glob", "matching", "every file", "*.", "**/")),
+    ("Grep", ("grep", "search", "callers", "occurrences", "references", "usages")),
+    ("Bash", ("bash", "shell", "run the", "run command", "run script", "terminal", "command line")),
+    ("Write", ("create", "new file", "from scratch", "generate a new", "write a new")),
+    ("Edit", ("edit", "in-place", "modify the", "replace the", "change the line")),
+    ("Read", ("read", "contents", "view", "open the file", "show the file", "cat ")),
+]
 
 
 def select_tool(task: str) -> str:
@@ -27,6 +48,6 @@ def select_tool(task: str) -> str:
     for tool, keywords in _RULES:
         if any(keyword in text for keyword in keywords):
             return tool
-    # TODO: Choose a safe default tool when no rule matches (the most read-only, least
-    # destructive option).
-    raise NotImplementedError
+    # No rule matched: default to the most read-only, least destructive tool.
+    return "Read"
+
