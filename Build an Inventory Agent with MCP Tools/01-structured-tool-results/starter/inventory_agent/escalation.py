@@ -22,4 +22,4 @@ def build_escalation(sku: str, requested_change: str, root_cause: str) -> Escala
     """Build the escalation payload for a blocked, approval-gated action."""
     # TODO: Return a compact Escalation. Carry the sku, the requested change, the root cause, and
     # a recommended_action telling a human what to do next (route to a manager, then retry).
-    raise NotImplementedError
+    return Escalation(sku=sku, requested_change=requested_change, root_cause=root_cause, recommended_action="Route to a manager, then retry")

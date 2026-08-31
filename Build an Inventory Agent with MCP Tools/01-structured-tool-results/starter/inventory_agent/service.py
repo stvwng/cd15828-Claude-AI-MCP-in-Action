@@ -35,36 +35,80 @@ class InventoryService:
 
     def _resolve_product(self, sku: str) -> tuple[dict[str, Any] | None, ToolResult | None]:
         """Return (product, None) or (None, validation_error)."""
-        # TODO: A malformed SKU and an unknown SKU are both VALIDATION failures. Return a
-        # (None, ToolResult.fail(...)) pair for each, or (product, None) when the SKU resolves.
-        raise NotImplementedError
+        # A malformed SKU and an unknown SKU are both VALIDATION failures.
+        if not _SKU_PATTERN.match(sku):
+            return (None, ToolResult.fail(ErrorCategory.VALIDATION, f"Malformed SKU: {sku!r}"))
+        product = self._products.get(sku)
+        if product is None:
+            return (None, ToolResult.fail(ErrorCategory.VALIDATION, f"Unknown SKU: {sku!r}"))
+        return (product, None)
 
     def _check_warehouse(self, warehouse_id: str) -> ToolResult | None:
         """Return a validation error if the warehouse id is unknown, else None."""
-        # TODO: An unknown warehouse id is a VALIDATION failure; a known one returns None.
-        raise NotImplementedError
+        if warehouse_id not in self._warehouses:
+            return ToolResult.fail(ErrorCategory.VALIDATION, f"Unknown warehouse: {warehouse_id!r}")
+        return None
 
     # -- tool handlers -----------------------------------------------------------------
 
     def check_stock(self, sku: str, warehouse_id: str) -> ToolResult:
-        # TODO: Read-only lookup. Validate the SKU and warehouse, treat an offline warehouse as
-        # a TRANSIENT failure, and return ToolResult.ok with the quantity. A SKU with zero units
-        # is a SUCCESS with quantity 0, not an error.
-        raise NotImplementedError
+        # Read-only lookup. An offline warehouse is TRANSIENT (retry later); a SKU with zero
+        # units at a warehouse is a SUCCESS with quantity 0, not an error.
+        product, validation_error = self._resolve_product(sku)
+        if validation_error:
+            return validation_error
+        warehouse_error = self._check_warehouse(warehouse_id)
+        if warehouse_error:
+            return warehouse_error
+        if self._warehouses[warehouse_id]["status"] != "online":
+            return ToolResult.fail(
+                ErrorCategory.TRANSIENT, f"Warehouse {warehouse_id} is offline"
+            )
+        quantity = product["stock"].get(warehouse_id, 0)
+        return ToolResult.ok({"quantity": quantity})
 
     def update_price(self, sku: str, new_price: float, manager_approved: bool) -> ToolResult:
-        # TODO: A non-positive price is VALIDATION. Without manager approval, block the mutation
-        # BEFORE changing anything and return a PERMISSION failure. Only mutate once approved,
-        # then return ToolResult.ok with previous and new price.
-        raise NotImplementedError
+        # A non-positive price is VALIDATION. Without manager approval, block the mutation
+        # BEFORE changing anything (PERMISSION). Only mutate once approved.
+        product, validation_error = self._resolve_product(sku)
+        if validation_error:
+            return validation_error
+        if new_price <= 0:
+            return ToolResult.fail(ErrorCategory.VALIDATION, "Price must be positive")
+        if not manager_approved:
+            return ToolResult.fail(ErrorCategory.PERMISSION, "Manager approval required")
+        previous_price = product["price"]
+        product["price"] = new_price
+        return ToolResult.ok({"previous_price": previous_price, "new_price": new_price})
 
     def process_return(self, sku: str, order_id: str, days_since_purchase: int) -> ToolResult:
-        # TODO: Negative days is VALIDATION. A return past the SKU's return window is a BUSINESS
-        # failure (a valid request the business rejects). Otherwise return ToolResult.ok with an
-        # RMA id.
-        raise NotImplementedError
+        # Negative days is VALIDATION. A return past the SKU's return window is a BUSINESS
+        # failure (a valid request the business rejects).
+        product, validation_error = self._resolve_product(sku)
+        if validation_error:
+            return validation_error
+        if days_since_purchase < 0:
+            return ToolResult.fail(
+                ErrorCategory.VALIDATION, "Days since purchase cannot be negative"
+            )
+        if days_since_purchase > product["return_window_days"]:
+            return ToolResult.fail(
+                ErrorCategory.BUSINESS, "Return past the return window for this SKU"
+            )
+        return ToolResult.ok({"rma_id": f"RMA-{order_id}"})
 
     def flag_shrinkage(self, sku: str, warehouse_id: str, suspected_units: int) -> ToolResult:
-        # TODO: Validate the SKU and warehouse. suspected_units must be a positive integer
-        # (VALIDATION otherwise). Return ToolResult.ok with a shrinkage case id.
-        raise NotImplementedError
+        # Validate the SKU and warehouse; suspected_units must be a positive integer.
+        _product, validation_error = self._resolve_product(sku)
+        if validation_error:
+            return validation_error
+        warehouse_error = self._check_warehouse(warehouse_id)
+        if warehouse_error:
+            return warehouse_error
+        if suspected_units <= 0:
+            return ToolResult.fail(
+                ErrorCategory.VALIDATION, "Suspected units must be a positive integer"
+            )
+        return ToolResult.ok(
+            {"shrinkage_case_id": f"SHRINKAGE-{sku}-{warehouse_id}-{suspected_units}"}
+        )

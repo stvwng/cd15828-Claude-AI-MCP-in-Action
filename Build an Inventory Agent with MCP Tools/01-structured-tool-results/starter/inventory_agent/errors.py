@@ -23,9 +23,9 @@ class ErrorCategory(StrEnum):
     PERMISSION = "permission"
 
 
-# TODO: Only transient failures are worth retrying. Build the set of retryable categories so
-# is_retryable can be derived from the category, not set by hand at every call site.
-_RETRYABLE: set[ErrorCategory] = set()
+# Only transient failures are worth retrying, so is_retryable is derived from the category
+# rather than set by hand at every call site.
+_RETRYABLE: set[ErrorCategory] = {ErrorCategory.TRANSIENT}
 
 
 class ToolResult(BaseModel):
@@ -45,18 +45,21 @@ class ToolResult(BaseModel):
 
     @classmethod
     def ok(cls, data: dict[str, Any]) -> ToolResult:
-        # TODO: Build a success envelope. A success has no error and carries only the data
-        # payload (no category, no retryability, no message).
-        raise NotImplementedError
+        # A success carries only the data payload: no category, retryability, or message.
+        return cls(is_error=False, data=data)
 
     @classmethod
     def fail(cls, category: ErrorCategory, message: str) -> ToolResult:
-        # TODO: Build a failure envelope. Set is_error, record the category and message, and
-        # derive is_retryable from the category (use _RETRYABLE) rather than passing it in.
-        raise NotImplementedError
+        # Retryability is derived from the category so callers never have to decide it.
+        return cls(
+            is_error=True,
+            error_category=category,
+            message=message,
+            is_retryable=category in _RETRYABLE,
+        )
 
     def to_wire(self) -> dict[str, Any]:
         """Serialize to the camelCase dict an MCP client receives."""
-        # TODO: Serialize using the camelCase aliases (isError/errorCategory/isRetryable) and
-        # drop fields that are None so a success result carries no empty error fields.
-        raise NotImplementedError
+        # by_alias emits isError/errorCategory/isRetryable; exclude_none drops the empty error
+        # fields on a success (and the empty data field on a failure).
+        return self.model_dump(by_alias=True, exclude_none=True, mode="json")
