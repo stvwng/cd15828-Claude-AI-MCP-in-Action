@@ -34,7 +34,14 @@ def tool_choice_for(workflow: Workflow) -> dict[str, str]:
     # TODO: Map each workflow to its tool_choice payload. VERIFY_BEFORE_RETURN forces a single
     # named tool ({"type": "tool", "name": ...}) so sequencing is guaranteed; GUARANTEED_TOOL
     # uses {"type": "any"}; OPEN_ENDED uses {"type": "auto"}.
-    raise NotImplementedError
+    if workflow == Workflow.VERIFY_BEFORE_RETURN:
+        return {"type": "tool", "name": "check_stock"}
+    elif workflow == Workflow.GUARANTEED_TOOL:
+        return {"type": "any"}
+    elif workflow == Workflow.OPEN_ENDED:
+        return {"type": "auto"}
+    else:
+        raise ValueError(f"Invalid workflow: {workflow}")
 
 
 def build_messages_request(
@@ -47,7 +54,13 @@ def build_messages_request(
     """Assemble a well-formed Anthropic Messages API request for a workflow."""
     # TODO: Assemble the request dict: model, max_tokens, messages, the scoped tool schemas
     # (from anthropic_tool_schemas), and the tool_choice for this workflow.
-    raise NotImplementedError
+    return {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": messages,
+        "tools": anthropic_tool_schemas(server),
+        "tool_choice": tool_choice_for(workflow),
+    }
 
 
 class ReturnWorkflowGuard:
@@ -63,9 +76,12 @@ class ReturnWorkflowGuard:
 
     def record(self, tool_name: str) -> None:
         # TODO: Remember when check_stock has run so the guard can release process_return.
-        raise NotImplementedError
+        if tool_name == "check_stock":
+            self._stock_checked = True
 
     def can_run(self, tool_name: str) -> bool:
         # TODO: Allow any tool except process_return, which is allowed only after check_stock
         # has been recorded.
-        raise NotImplementedError
+        if tool_name == "process_return":
+            return self._stock_checked
+        return True

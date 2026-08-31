@@ -22,10 +22,18 @@ from inventory_agent.errors import ToolResult
 
 def anthropic_tool_schemas(server: FastMCP) -> list[dict[str, Any]]:
     """Convert the MCP server's tools into Anthropic Messages API tool schemas."""
-    # TODO: Ask the server for its registered tools and return one {name, description,
-    # input_schema} dict per tool — exactly the scoped tool set the model is allowed to see,
-    # nothing else. Note list_tools() is async; call it from this sync function with asyncio.run.
-    raise NotImplementedError
+    # list_tools() is async; drive it from this sync function with asyncio.run. The MCP Tool
+    # exposes its JSON Schema as `inputSchema` (camelCase), which maps to the Messages API's
+    # snake_case `input_schema` field. Only the server's registered (scoped) tools are returned.
+    tools = asyncio.run(server.list_tools())
+    return [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.inputSchema,
+        }
+        for tool in tools
+    ]
 
 
 def to_tool_result_block(tool_use_id: str, result: ToolResult) -> dict[str, Any]:
