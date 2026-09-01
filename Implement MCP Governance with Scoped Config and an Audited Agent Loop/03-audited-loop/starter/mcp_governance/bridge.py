@@ -107,6 +107,13 @@ async def build_bridge(
     #   "policy-lookup": `for tool in await server.list_tools():` (list_tools is async)
     #   append a GovernedTool(name, server=server_name, scope=_SCOPE_BY_SERVER[server_name],
     #   description=tool.description or "", input_schema=tool.inputSchema).
-    raise NotImplementedError
-
+    for server, server_name in (
+        (build_claims_server(claims), "claims-database"),
+        (build_policy_server(policy), "policy-lookup"),
+    ):
+        for tool in await server.list_tools():
+            tools.append(
+                GovernedTool(name=tool.name, server=server_name, scope=_SCOPE_BY_SERVER[server_name], description=tool.description or "", input_schema=tool.inputSchema)
+            )
+            
     return Bridge(tools, claims, policy)
