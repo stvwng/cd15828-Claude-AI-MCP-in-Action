@@ -149,14 +149,14 @@ def load_project_config(path: str | Path) -> McpConfig:
     # TODO (LO-2): load this file and tag every server with PROJECT scope.
     #   Scope is a *file-level* property, not per-server: a whole .mcp.json is project
     #   scope. Delegate to _load(path, ...) with the right Scope.
-    raise NotImplementedError
+    return _load(path, Scope.PROJECT)
 
 
 def load_personal_config(path: str | Path) -> McpConfig:
     """Load a personal-scoped ``~/.claude.json`` (individual workflows)."""
     # TODO (LO-2): load this file and tag every server with PERSONAL scope.
     #   A whole ~/.claude.json is personal scope. Delegate to _load(path, ...).
-    raise NotImplementedError
+    return _load(path, Scope.PERSONAL)
 
 
 # ----------------------------------------------------------------------- expansion
@@ -184,7 +184,18 @@ def expand_env(config: McpConfig, environ: Mapping[str, str]) -> McpConfig:
     #   passed-in `environ` -- no module reads os.environ for credentials. Values with no
     #   ${...} token pass through unchanged; a missing referenced var raises
     #   MissingEnvVarError (handled by _expand_value).
-    raise NotImplementedError
+    return McpConfig(
+        mcpServers={
+            name: cfg.model_copy(
+                update={
+                    "args": [_expand_value(a, environ, name) for a in cfg.args],
+                    "env": {k: _expand_value(v, environ, name) for k, v in cfg.env.items()},
+                }
+            )
+            for name, cfg in config.mcpServers.items()
+        },
+        scope=config.scope,
+    )
 
 
 def find_missing_env_vars(config: McpConfig, environ: Mapping[str, str]) -> list[MissingRef]:
@@ -214,8 +225,19 @@ def _looks_like_secret(key: str, value: str) -> str | None:
     #   credential prefix (_SECRET_PREFIXES); OR sits under a credential-named key
     #   (_SECRET_KEY) as a non-empty literal; OR is a high-entropy blob (_HIGH_ENTROPY).
     #   Otherwise return None.
-    raise NotImplementedError
 
+    # A ${VAR} reference is externalized -- resolved from the environment, never
+    # committed -- so it can never be a leak. Guard for it before any literal check.
+    if "${" in value:
+        return None
+    if value.startswith(_SECRET_PREFIXES):
+        return f"begins with a known credential prefix: {value[:len(_SECRET_PREFIXES)]}"
+    if _SECRET_KEY.search(key):
+        if value:
+            return "is a non-empty literal"
+    if _HIGH_ENTROPY.match(value):
+        return "is a high-entropy blob"
+    return None
 
 def scan_for_secrets(config: McpConfig) -> list[SecretLeak]:
     """Scan an (unexpanded) config for plaintext credentials. A config whose credentials
