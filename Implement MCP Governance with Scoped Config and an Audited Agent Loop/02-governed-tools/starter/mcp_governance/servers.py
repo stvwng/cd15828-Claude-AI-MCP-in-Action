@@ -39,7 +39,7 @@ def _not_found(kind: str, identifier: str) -> dict[str, Any]:
     #   A raised exception crashes the agent loop; a structured error lets it keep going
     #   and lets the audit outcome be recorded as "error". Shape:
     #     {"found": False, "is_error": True, "error_category": "not_found", "reason": ...}
-    raise NotImplementedError
+    return {"found": False, "is_error": True, "error_category": "not_found", "reason": f"{kind} not found: {identifier}"}
 
 
 def _claim_wire(claim: Claim) -> dict[str, Any]:
@@ -94,6 +94,9 @@ def build_claims_server(service: ClaimsService | None = None) -> FastMCP:
     #   Register a resource on `server` (an `mcp` SDK feature: @server.resource(uri, ...);
     #   name="claims-schema", mime_type="application/json") whose function returns
     #   json.dumps(build_schema_catalog(), indent=2).
+    @server.resource(SCHEMA_RESOURCE_URI, name="claims-schema", mime_type="application/json")
+    def claims_schema() -> str:
+        return json.dumps(build_schema_catalog(), indent=2)
 
     return server
 

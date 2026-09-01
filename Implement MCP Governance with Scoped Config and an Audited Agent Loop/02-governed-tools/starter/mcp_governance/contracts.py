@@ -45,4 +45,33 @@ class ToolContract:
 #   render() turns these into the wire description used by BOTH the FastMCP server and the
 #   bridge, so descriptions stay the single source of truth -- never re-stated in the
 #   system prompt. These same descriptions must later pass lint_description at full score.
-CONTRACTS: dict[str, ToolContract] = {}
+
+get_claim_contract = ToolContract(
+    name="get_claim",
+    summary="Get a claim status",
+    when_to_use="you have a claim ID and need its status",
+    instead_of="Use this instead of a generic built-in",
+    example="get_claim(claim_id='CLM-10001')"
+)
+
+search_claims_contract = ToolContract(
+    name="search_claims",
+    summary="Search claims",
+    when_to_use="you need to search claims",
+    instead_of="Use this instead of a generic built-in",
+    example="search_claims(query='CLM-10001')"
+)
+
+lookup_policy_contract = ToolContract(
+    name="lookup_policy",
+    summary="Lookup a policy",
+    when_to_use="you need to lookup a policy",
+    instead_of="Use this instead of a generic built-in",
+    example="lookup_policy(policy_id='POL-10001')"
+)
+
+CONTRACTS: dict[str, ToolContract] = {
+    "get_claim": get_claim_contract,
+    "search_claims": search_claims_contract,
+    "lookup_policy": lookup_policy_contract,
+}

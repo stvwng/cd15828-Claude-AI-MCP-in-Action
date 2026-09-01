@@ -88,4 +88,8 @@ def build_schema_catalog() -> dict[str, Any]:
     #     - "description": a one-line "read this to discover fields without exploratory calls"
     #     - "fields": one rendered entry per spec in CLAIMS_SCHEMA (spec.model_dump,
     #                 dropping None so a field without an enum omits the key)
-    raise NotImplementedError
+    return {
+        "resource": "claims://schema",
+        "description": "Read this to discover fields without exploratory calls",
+        "fields": [spec.model_dump(exclude_none=True) for spec in CLAIMS_SCHEMA],
+    }

@@ -62,7 +62,38 @@ def decide(need: IntegrationNeed) -> Recommendation:
     #        more than owning a purpose-built one -- the borderline call).
     #     4. otherwise                        -> COMMUNITY (reuse a mature server for a
     #        generic, non-proprietary, low/medium-customization need).
-    raise NotImplementedError
+    if need.proprietary_data or need.handles_pii:
+        factors = []
+        if need.proprietary_data:
+            factors.append("proprietary_data")
+        if need.handles_pii:
+            factors.append("handles_pii")
+        return Recommendation(
+            need=need.name,
+            recommendation=Choice.CUSTOM,
+            rationale="The team must own the system of record and its access controls; never hand PII to a community server.",
+            deciding_factors=factors,
+        )
+    if not need.community_server_exists:
+        return Recommendation(
+            need=need.name,
+            recommendation=Choice.CUSTOM,
+            rationale="Nothing mature to reuse.",
+            deciding_factors=["no_community_server"],
+        )
+    if need.customization == Level.HIGH:
+        return Recommendation(
+            need=need.name,
+            recommendation=Choice.CUSTOM,
+            rationale="Adapting the community server costs more than owning a purpose-built one -- the borderline call.",
+            deciding_factors=["high_customization"],
+        )
+    return Recommendation(
+        need=need.name,
+        recommendation=Choice.COMMUNITY,
+        rationale="Reuse a mature server for a generic, non-proprietary, low/medium-customization need.",
+        deciding_factors=["mature_community_server"],
+    )
 
 
 def load_integration_needs(path: Path = INTEGRATION_NEEDS_PATH) -> list[IntegrationNeed]:
@@ -96,4 +127,18 @@ def lint_description(text: str) -> DescriptionScore:
     #   Return DescriptionScore(score=<count present>, missing=[<names absent>]).
     #   This is the SAME bar your own CONTRACTS descriptions must clear (the project
     #   dogfoods its quality bar: every contract description must score the maximum).
-    raise NotImplementedError
+    score = 0
+    missing = []
+    if "use this when" in text.lower():
+        score += 1
+    else:
+        missing.append("when_to_use")
+    if "instead of" in text.lower():
+        score += 1
+    else:
+        missing.append("builtin_differentiation")
+    if "example:" in text.lower():
+        score += 1
+    else:
+        missing.append("concrete_example")
+    return DescriptionScore(score=score, missing=missing)

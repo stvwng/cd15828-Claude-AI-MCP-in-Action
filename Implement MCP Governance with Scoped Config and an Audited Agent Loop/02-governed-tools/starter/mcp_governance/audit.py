@@ -52,7 +52,8 @@ def arg_digest(args: dict[str, Any]) -> str:
     #   args produce an identical digest and a raw claim_id/policy_id NEVER lands in the
     #   trail in cleartext. Hash a canonical JSON encoding (sort_keys=True, compact
     #   separators, default=str) so dict ordering doesn't change the digest.
-    raise NotImplementedError
+    canonical = json.dumps(args, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class AuditEntry(BaseModel):
@@ -79,7 +80,7 @@ class AuditTrail:
         # TODO (LO-6 audit trail): append `entry`. The trail is APPEND-ONLY -- this is the
         #   only way entries enter it, and there is deliberately no mutate/delete API, so a
         #   compliance log can never be quietly edited after the fact.
-        raise NotImplementedError
+        self._entries.append(entry)
 
     @property
     def entries(self) -> tuple[AuditEntry, ...]:
@@ -132,4 +133,29 @@ class AuditedToolRunner:
         #   5. record EXACTLY ONE AuditEntry (timestamp from self._clock.now(), the scope as
         #      the identity boundary, the digest, the caller, the outcome)
         #   6. return the result dict
-        raise NotImplementedError
+        digest = arg_digest(args)
+        server = self._bridge.server_for(name)
+        scope = self._bridge.scope_for(name)
+        try:
+            result = self._bridge.dispatch(name, args)
+            outcome = "error" if result.get("is_error") else "ok"
+        except Exception as exc:  # a tool failure must never crash the loop
+            result = {
+                "found": False,
+                "is_error": True,
+                "error_category": "exception",
+                "reason": str(exc),
+            }
+            outcome = "error"
+        self._trail.record(
+            AuditEntry(
+                timestamp=self._clock.now(),
+                server=server,
+                scope=scope,
+                tool=name,
+                caller_identity=self._caller,
+                arg_digest=digest,
+                outcome=outcome,
+            )
+        )
+        return result

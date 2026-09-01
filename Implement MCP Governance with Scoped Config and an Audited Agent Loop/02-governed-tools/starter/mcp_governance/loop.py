@@ -140,4 +140,45 @@ def run_agent(
     #          through gateway.run(name, input), append the tool_result blocks as the next
     #          user message, and continue.
     #   4. if the loop falls through, return an Outcome with stop_reason="max_iterations".
-    raise NotImplementedError
+    gateway = AuditedToolRunner(bridge, trail, clock or SystemClock(), caller_identity)
+    tools = bridge.anthropic_tools()
+    messages: list[dict[str, Any]] = [{"role": "user", "content": request}]
+    tool_calls: list[str] = []
+
+    for _ in range(max_iterations):
+        response = runner.create(system=system_prompt, messages=messages, tools=tools)
+        if response.stop_reason != "tool_use":
+            final_text = "".join(
+                block.text
+                for block in response.content
+                if getattr(block, "type", None) == "text"
+            )
+            return Outcome(
+                stop_reason=response.stop_reason,
+                final_text=final_text,
+                tool_calls=tool_calls,
+                audit_entries=len(trail),
+            )
+
+        messages.append({"role": "assistant", "content": _content_to_wire(response.content)})
+        tool_results: list[dict[str, Any]] = []
+        for block in response.content:
+            if getattr(block, "type", None) != "tool_use":
+                continue
+            tool_calls.append(block.name)
+            result = gateway.run(block.name, block.input)
+            tool_results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(result),
+                }
+            )
+        messages.append({"role": "user", "content": tool_results})
+
+    return Outcome(
+        stop_reason="max_iterations",
+        final_text="",
+        tool_calls=tool_calls,
+        audit_entries=len(trail),
+    )
